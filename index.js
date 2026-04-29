@@ -129,7 +129,20 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 async function getRobloxUser(username) {
   try {
     const r = await fetch(`https://api.roblox.com/users/get-by-username?username=${encodeURIComponent(username)}`);
-    return r.ok ? r.json() : null;
+    // Some Roblox responses may still return 200 with a body indicating not found
+    if (!r.ok) {
+      return null;
+    }
+
+    const data = await r.json().catch(() => null);
+    if (!data) return null;
+
+    // Roblox may return the ID under different keys depending on API version
+    const id = data.Id ?? data.id ?? null;
+    if (!id) return null;
+
+    // Normalize to always expose Id for downstream logic
+    return { ...data, Id: id };
   } catch {
     return null;
   }
