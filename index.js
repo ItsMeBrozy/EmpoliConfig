@@ -167,39 +167,98 @@ client.on("interactionCreate", async i => {
   try {
 
     if (i.isButton() && i.customId === "verify_start") {
-      // Web-based verification only; do not DM. Generate a code and present the link publicly.
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      pendingVerifications.set(i.user.id, {
-        code,
-        timestamp: Date.now(),
-        guildId: i.guild.id
-      });
-      try {
-        await i.reply(`Verification link: ${PUBLIC_URL}/verify?code=${code}`);
-      } catch {
-        await i.editReply("Could not send verification link in chat.");
-      }
+      // Show Roblox username modal in Discord (username box)
+      const modal = new ModalBuilder()
+        .setCustomId("verify_username_modal")
+        .setTitle("Roblox Verification");
+
+      const input = new TextInputBuilder()
+        .setCustomId("roblox_username")
+        .setLabel("Enter your Roblox username")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      await i.showModal(modal);
       return;
     }
 
     if (i.isModalSubmit() && i.customId === "verify_username_modal") {
-      // Modal-based flow is deprecated; acknowledge promptly to avoid interaction timeout
+      // Process Roblox username from modal
+      const inputValue = i.fields.getTextInputValue("roblox_username");
+      let data = null;
+      const urlMatch = inputValue.match(/https?:\/\/[^\s]+roblox\.com\/users\/(\d+)/i);
+      if (urlMatch) {
+        const idFromUrl = urlMatch[1];
+        data = { Id: idFromUrl };
+      } else {
+        data = await getRobloxUser(inputValue);
+      }
+      if (!data || !data.Id) {
+        await i.reply({ content: "Roblox user not found.", ephemeral: true });
+        return;
+      }
+
+      const profile = data.Id ? await getRobloxProfile(data.Id) : null;
+      const displayName = profile?.displayName ?? profile?.name ?? null;
+      const canonicalName = displayName ?? inputValue;
+
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      pendingVerifications.set(i.user.id, {
+        robloxUsername: canonicalName,
+        robloxId: data.Id,
+        code: code,
+        timestamp: Date.now(),
+        guildId: i.guild.id
+      });
+
+      const dmContent = `🔐 Roblox Verification\n\nAdd this code to your Roblox description:\n\n${code}\n\nWhen you're ready, press Verify in this chat to complete the verification.`;
       try {
-        await i.reply({ content: "Verification via web is required. Please use the link sent in DM.", ephemeral: true });
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("dm_verify_confirm")
+            .setLabel("Verify")
+            .setStyle(ButtonStyle.Success)
+        );
+        await i.user.send({ content: dmContent, components: [row] });
+        await i.reply({ content: "Check your DM for verification steps.", ephemeral: true });
       } catch {
-        // ignore if already replied
+        pendingVerifications.delete(i.user.id);
+        await i.reply({ content: "I couldn't DM you. Enable DMs.", ephemeral: true });
+      }
+      return;
+    }
+
+    // DM: user clicked Verify in the account info message (perform in-Discord verification)
+    if (i.isButton() && i.customId === "dm_verify_confirm") {
+      try {
+        const pv = pendingVerifications.get(i.user.id);
+        if (!pv) {
+          await i.reply({ content: "No pending verification found.", ephemeral: true });
+          return;
+        }
+        // Verify by checking Roblox profile description for the code
+        const profile = pv.robloxId ? await getRobloxProfile(pv.robloxId) : null;
+        const hasCode = !!(profile?.description?.includes?.(pv.code));
+        if (!hasCode) {
+          await i.reply({ content: "Code not found in Roblox profile. Add the code to your profile description and try again.", ephemeral: true });
+          return;
+        }
+        const guild = client.guilds.cache.get(pv.guildId);
+        const member = await guild.members.fetch(i.user.id);
+        const discordName = member.nickname ?? member.user.username;
+        const nickname = `${discordName} (${pv.robloxUsername})`;
+        await member.setNickname(nickname).catch(() => { });
+        pendingVerifications.delete(i.user.id);
+        await i.reply({ content: "Verification successful!", ephemeral: true });
+      } catch {
+        pendingVerifications.delete(i.user.id);
+        await i.reply({ content: "Verification error.", ephemeral: true });
       }
     }
 
-    // Public verification flow (no DM interactions)
-    if (i.isButton() && i.customId === "dm_verify_confirm") {
-      // Ignore DM-based confirmation in this redesigned flow
-      try {
-        await i.reply({ content: "Verification is handled via the web link. Please use the URL sent in chat.", ephemeral: true });
-      } catch {}
-    }
-
-    // Cancel button (no-op in public flow)
+    // Cancel button (no-op in this flow)
     if (i.isButton() && i.customId === "dm_verify_cancel") {
       try {
         await i.reply({ content: "Verification canceled.", ephemeral: true });
