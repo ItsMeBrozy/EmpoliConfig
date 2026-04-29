@@ -197,6 +197,10 @@ client.on("interactionCreate", async i => {
         return i.editReply("Roblox user not found.");
       }
 
+      // Fetch profile for richer verification info
+      const profile = data.Id ? await getRobloxProfile(data.Id) : null;
+      const displayName = profile?.displayName ?? profile?.name ?? null;
+
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
       pendingVerifications.set(i.user.id, {
@@ -207,8 +211,59 @@ client.on("interactionCreate", async i => {
         guildId: i.guild.id
       });
 
-      try {
+      // Build account info block for DM
+      const infoParts = [
+        `Username: ${username}`,
+        `Roblox ID: ${data.Id}`,
+        displayName ? `Display Name: ${displayName}` : null
+      ].filter(Boolean);
+      const infoBlock = infoParts.length ? infoParts.join("\n") : "";
 
+      const dmContent = `🔐 Roblox Verification
+
+Account Info:
+${infoBlock}
+ 
+1️⃣ Add this code to your Roblox description:
+
+${code}
+
+2️⃣ Open this link:
+${PUBLIC_URL}/verify?code=${code}
+
+3️⃣ Press verify on the website.`;
+
+      try {
+        // Send detailed account info with actions in DM
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("dm_verify_confirm")
+            .setLabel("Verify")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId("dm_verify_cancel")
+            .setLabel("Cancel")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await i.user.send({ content: dmContent, components: [row] });
+        await i.editReply("Check your DM for account info and verification options.");
+      } catch {
+        pendingVerifications.delete(i.user.id);
+        await i.editReply("I couldn't DM you. Enable DMs.");
+      }
+
+    }
+
+    // DM: user clicked Verify in the account info message
+    if (i.isButton() && i.customId === "dm_verify_confirm") {
+      try {
+        const pv = pendingVerifications.get(i.user.id);
+        if (!pv) {
+          await i.reply({ content: "No pending verification found.", ephemeral: true });
+          return;
+        }
+        const code = pv.code;
         await i.user.send(
           `🔐 Roblox Verification
 
@@ -221,16 +276,21 @@ ${PUBLIC_URL}/verify?code=${code}
 
 3️⃣ Press verify on the website.`
         );
-
-        await i.editReply("Check your DM for the verification link!");
-
+        await i.editReply("Verification link has been sent to your DM.");
       } catch {
-
         pendingVerifications.delete(i.user.id);
         await i.editReply("I couldn't DM you. Enable DMs.");
-
       }
+    }
 
+    // DM: user canceled the verification
+    if (i.isButton() && i.customId === "dm_verify_cancel") {
+      pendingVerifications.delete(i.user.id);
+      try {
+        await i.reply({ content: "Verification canceled.", ephemeral: true });
+      } catch {
+        // ignore
+      }
     }
 
   } catch (e) {
