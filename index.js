@@ -172,88 +172,28 @@ client.on("interactionCreate", async i => {
   try {
 
     if (i.isButton() && i.customId === "verify_start") {
-
-      const modal = new ModalBuilder()
-        .setCustomId("verify_username_modal")
-        .setTitle("Roblox Verification");
-
-      const input = new TextInputBuilder()
-        .setCustomId("roblox_username")
-        .setLabel("Enter your Roblox username")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(input)
-      );
-
-      await i.showModal(modal);
+      // Direct web-based verification (no Roblox username required)
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      pendingVerifications.set(i.user.id, {
+        code,
+        timestamp: Date.now(),
+        guildId: i.guild.id
+      });
+      try {
+        await i.user.send(
+          `🔐 Roblox Verification\n\nPlease verify your Roblox account by visiting:\n${PUBLIC_URL}/verify?code=${code}\n\nIf you can't click the link, copy-paste it into your browser.`
+        );
+        await i.editReply("Check your DM for the verification link!");
+      } catch {
+        await i.editReply("I couldn't DM you. Enable DMs.");
+      }
       return;
     }
 
     if (i.isModalSubmit() && i.customId === "verify_username_modal") {
-
+      // This flow is deprecated in favor of web-based verification; ignore any modal submissions.
       await i.deferReply({ ephemeral: true });
-
-      const inputValue = i.fields.getTextInputValue("roblox_username");
-
-      // Support both usernames and Roblox profile URLs
-      let data = null;
-      const urlMatch = inputValue.match(/https?:\/\/[^\s]+roblox\.com\/users\/(\d+)/i);
-      if (urlMatch) {
-        const idFromUrl = urlMatch[1];
-        data = { Id: idFromUrl };
-      } else {
-        data = await getRobloxUser(inputValue);
-      }
-
-      if (!data || !data.Id) {
-        return i.editReply("Roblox user not found.");
-      }
-
-      // Fetch profile for potential future use (not displayed to user)
-      const profile = data.Id ? await getRobloxProfile(data.Id) : null;
-      const displayName = profile?.displayName ?? profile?.name ?? null;
-      // Canonical Roblox username fallback (best available displayName/name)
-      const canonicalName = displayName ?? inputValue;
-
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-      pendingVerifications.set(i.user.id, {
-        robloxUsername: canonicalName,
-        robloxId: data.Id,
-        code: code,
-        timestamp: Date.now(),
-        guildId: i.guild.id
-      });
-      // DM content now provides only the verification link in DM (no username/ID shown)
-      const dmContent = `🔐 Roblox Verification
-
-Click this link to verify your Roblox account:
-${PUBLIC_URL}/verify?code=${code}
-
-If you can't click the link, copy-paste it into your browser.`;
-
-      try {
-        // Send detailed account info with actions in DM
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId("dm_verify_confirm")
-            .setLabel("Verify")
-            .setStyle(ButtonStyle.Success),
-          new ButtonBuilder()
-            .setCustomId("dm_verify_cancel")
-            .setLabel("Cancel")
-            .setStyle(ButtonStyle.Danger)
-        );
-
-        await i.user.send({ content: dmContent, components: [row] });
-        await i.editReply("Check your DM for account info and verification options.");
-      } catch {
-        pendingVerifications.delete(i.user.id);
-        await i.editReply("I couldn't DM you. Enable DMs.");
-      }
-
+      await i.editReply("Verification via web is required. Please use the link sent in DM.");
     }
 
     // DM: user clicked Verify in the account info message
