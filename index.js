@@ -221,7 +221,14 @@ ${PUBLIC_URL}/verify?code=${code}
     }
 
   } catch (e) {
-    console.error(e);
+    console.error("Interaction error:", e);
+    try {
+      if (i.deferred || i.replied) {
+        await i.editReply({ content: "❌ Something went wrong." });
+      } else {
+        await i.reply({ content: "❌ Something went wrong.", ephemeral: true });
+      }
+    } catch {}
   }
 
 });
