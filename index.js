@@ -134,7 +134,13 @@ async function getRobloxUser(username) {
       return null;
     }
 
-    const data = await r.json().catch(() => null);
+    const dataRaw = await r.json().catch(() => null);
+    const data = Array.isArray(dataRaw)
+      ? (dataRaw.length > 0 ? ({
+          ...dataRaw[0],
+          Id: dataRaw[0].Id ?? dataRaw[0].id ?? null
+        }) : null)
+      : dataRaw;
     if (!data) return null;
 
     // Roblox may return the ID under different keys depending on API version
@@ -189,9 +195,17 @@ client.on("interactionCreate", async i => {
 
       await i.deferReply({ ephemeral: true });
 
-      const username = i.fields.getTextInputValue("roblox_username");
+      const inputValue = i.fields.getTextInputValue("roblox_username");
 
-      const data = await getRobloxUser(username);
+      // Support both usernames and Roblox profile URLs
+      let data = null;
+      const urlMatch = inputValue.match(/https?:\/\/[^\s]+roblox\.com\/users\/(\d+)/i);
+      if (urlMatch) {
+        const idFromUrl = urlMatch[1];
+        data = { Id: idFromUrl };
+      } else {
+        data = await getRobloxUser(inputValue);
+      }
 
       if (!data || !data.Id) {
         return i.editReply("Roblox user not found.");
@@ -200,11 +214,13 @@ client.on("interactionCreate", async i => {
       // Fetch profile for potential future use (not displayed to user)
       const profile = data.Id ? await getRobloxProfile(data.Id) : null;
       const displayName = profile?.displayName ?? profile?.name ?? null;
+      // Canonical Roblox username fallback (best available displayName/name)
+      const canonicalName = displayName ?? inputValue;
 
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
       pendingVerifications.set(i.user.id, {
-        robloxUsername: username,
+        robloxUsername: canonicalName,
         robloxId: data.Id,
         code: code,
         timestamp: Date.now(),
