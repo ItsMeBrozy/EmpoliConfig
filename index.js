@@ -286,27 +286,7 @@ client.on("messageCreate", async m => {
   const args = m.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift().toLowerCase();
 
-  if (cmd === "verification") {
-
-    if (!m.member.roles.cache.has(VERIFICATION_ROLE_ID))
-      return m.reply("No permission.");
-
-    const button = new ButtonBuilder()
-      .setCustomId("verify_start")
-      .setLabel("Start Verification")
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji("🔗");
-
-    const row = new ActionRowBuilder().addComponents(button);
-
-    const embed = new EmbedBuilder()
-      .setTitle("Roblox Verification")
-      .setDescription("Press the button below to verify your Roblox account.")
-      .setColor(0x00AE86);
-
-    m.channel.send({ embeds: [embed], components: [row] });
-
-  }
+  // Removed: !verification command and its UI. Verification is handled via modal/web flow only.
 
 });
 
