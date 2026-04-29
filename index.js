@@ -197,7 +197,7 @@ client.on("interactionCreate", async i => {
         return i.editReply("Roblox user not found.");
       }
 
-      // Fetch profile for richer verification info
+      // Fetch profile for potential future use (not displayed to user)
       const profile = data.Id ? await getRobloxProfile(data.Id) : null;
       const displayName = profile?.displayName ?? profile?.name ?? null;
 
@@ -210,28 +210,13 @@ client.on("interactionCreate", async i => {
         timestamp: Date.now(),
         guildId: i.guild.id
       });
-
-      // Build account info block for DM
-      const infoParts = [
-        `Username: ${username}`,
-        `Roblox ID: ${data.Id}`,
-        displayName ? `Display Name: ${displayName}` : null
-      ].filter(Boolean);
-      const infoBlock = infoParts.length ? infoParts.join("\n") : "";
-
+      // DM content now provides only the verification link in DM (no username/ID shown)
       const dmContent = `🔐 Roblox Verification
 
-Account Info:
-${infoBlock}
- 
-1️⃣ Add this code to your Roblox description:
-
-${code}
-
-2️⃣ Open this link:
+Click this link to verify your Roblox account:
 ${PUBLIC_URL}/verify?code=${code}
 
-3️⃣ Press verify on the website.`;
+If you can't click the link, copy-paste it into your browser.`;
 
       try {
         // Send detailed account info with actions in DM
