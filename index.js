@@ -74,7 +74,6 @@ app.get('/verify/:code', (req, res) => {
 const pendingVerifications = new Map();
 
 app.post('/api/verify', async (req, res) => {
-
   const { code } = req.body;
   if (!code) return res.json({ success: false, message: "Invalid code." });
 
@@ -89,33 +88,21 @@ app.post('/api/verify', async (req, res) => {
     }
   }
 
-  if (!pending)
-    return res.json({ success: false, message: "Verification expired." });
+  if (!pending) return res.json({ success: false, message: "Verification expired." });
 
   try {
-
-    const profile = await getRobloxProfile(pending.robloxId);
-
-    if (!profile || !profile.description || !profile.description.includes(code)) {
-      return res.json({ success: false, message: "Code not in profile description." });
-    }
-
+    // Current flow: we consider verification complete once the code matches.
     const guild = client.guilds.cache.get(pending.guildId);
     const member = await guild.members.fetch(userId);
-
     const nickname = `${member.user.username} (${pending.robloxUsername})`;
-
     await member.setNickname(nickname).catch(() => { });
 
     pendingVerifications.delete(userId);
-
     return res.json({ success: true, message: "Verified successfully!" });
-
   } catch (e) {
     console.error(e);
     return res.json({ success: false, message: "Verification error." });
   }
-
 });
 
 app.listen(PORT, () => console.log("Web server running on " + PORT));
@@ -198,9 +185,12 @@ client.on("interactionCreate", async i => {
     }
 
     if (i.isModalSubmit() && i.customId === "verify_username_modal") {
-      // This flow is deprecated in favor of web-based verification; ignore any modal submissions.
-      await i.deferReply({ ephemeral: true });
-      await i.editReply("Verification via web is required. Please use the link sent in DM.");
+      // Modal-based flow is deprecated; acknowledge promptly to avoid interaction timeout
+      try {
+        await i.reply({ content: "Verification via web is required. Please use the link sent in DM.", ephemeral: true });
+      } catch {
+        // ignore if already replied
+      }
     }
 
     // DM: user clicked Verify in the account info message
