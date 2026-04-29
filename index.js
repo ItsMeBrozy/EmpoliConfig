@@ -40,28 +40,35 @@ button { padding:12px 24px; font-size:16px; background:#5865F2; color:white; bor
 
 <div id="result"></div>
 
-<script>
+  <script>
 function verify(){
  document.getElementById("result").innerHTML="Checking...";
 
- fetch("/api/verify",{
-   method:"POST",
-   headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({code:"${code}"})
- })
- .then(r=>r.json())
- .then(d=>{
-   if(d.success){
-     document.getElementById("result").innerHTML="<p style='color:green'>"+d.message+"</p>";
-   }else{
-     document.getElementById("result").innerHTML="<p style='color:red'>"+d.message+"</p>";
-   }
- })
+  fetch("/api/verify",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({code:"${code}"})
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.success){
+      document.getElementById("result").innerHTML="<p style='color:green'>"+d.message+"</p>";
+    }else{
+      document.getElementById("result").innerHTML="<p style='color:red'>"+d.message+"</p>";
+    }
+  })
 }
 </script>
 
 </body>
 </html>`);
+});
+
+// Convenience: support /verify/:code as an alternative to query parameter
+app.get('/verify/:code', (req, res) => {
+  const code = req.params.code;
+  if (!code) return res.send('Invalid verification link.');
+  res.redirect(`/verify?code=${code}`);
 });
 
 const pendingVerifications = new Map();
