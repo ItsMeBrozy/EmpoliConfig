@@ -330,27 +330,19 @@ client.on("messageCreate", async m => {
     const channelId = m.channel.id;
     if (!staffLineups.has(channelId)) {
       staffLineups.set(channelId, {
-        STAFF: {
-          A: { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null },
-          B: { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null }
-        },
-        PLAYERS: {
-          A: { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null },
-          B: { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null }
-        }
+        STAFF: { A: { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null } },
+        PLAYERS: { A: { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null } }
       });
     }
     const sub = (args[0] || 'show').toLowerCase();
     const data = staffLineups.get(channelId);
     if (sub === 'show') {
-    // Render four blocks: STAFF A, STAFF B, PLAYERS A, PLAYERS B
-    const staffA = STAFF_POS.map(pos => `[ ${pos} ]  ${data.STAFF.A[pos] ?? '{user}'}`).join("\n");
-    const staffB = STAFF_POS.map(pos => `[ ${pos} ]  ${data.STAFF.B[pos] ?? '{user}'}`).join("\n");
-    const playersA = PLAY_POS.map(pos => `[ ${pos} ]  ${data.PLAYERS.A[pos] ?? '{user}'}`).join("\n");
-    const playersB = PLAY_POS.map(pos => `[ ${pos} ]  ${data.PLAYERS.B[pos] ?? '{user}'}`).join("\n");
-    const block = `### STAFF FC - A\n${staffA}\n\n### STAFF FC - B\n${staffB}\n\n### PLAYERS FC - A\n${playersA}\n\n### PLAYERS FC - B\n${playersB}`;
-    await m.channel.send(block);
-    return;
+      // Render A blocks only
+      const staffA = STAFF_POS.map(pos => `${pos}: ${data.STAFF.A?.[pos] ?? '{user}'}`).join("\n");
+      const playersA = PLAY_POS.map(pos => `${pos}: ${data.PLAYERS.A?.[pos] ?? '{user}'}`).join("\n");
+      const block = `### STAFF FC - A\n${staffA}\n\n### PLAYERS FC - A\n${playersA}`;
+      await m.channel.send(block);
+      return;
     } else if (sub === 'reset') {
       // reset both STAFF and PLAYERS for the channel
       const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
@@ -364,28 +356,22 @@ client.on("messageCreate", async m => {
       await m.channel.send("Lineups reset for this channel");
       return;
     } else if (sub === 'set') {
-      // usage: !staffvsplayers set A GK @Player
+      // usage: !staffvsplayers set A GK @User
       const team = (args[1] || 'A').toUpperCase();
       const pos = (args[2] || '').toUpperCase();
       const member = m.mentions?.members?.first();
+      if (team !== 'A') {
+        await m.channel.send("Team must be A");
+        return;
+      }
       if (!member) {
         await m.channel.send("Please mention a user to assign");
         return;
       }
       const name = member.displayName || member.user.username;
-      if (team === 'A') {
-        // STAFF.A and PLAYERS.A
-        if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
-        if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
-      } else if (team === 'B') {
-        // STAFF.B and PLAYERS.B
-        if (STAFF_POS.includes(pos)) data.STAFF.B[pos] = name;
-        if (PLAY_POS.includes(pos)) data.PLAYERS.B[pos] = name;
-      } else {
-        await m.channel.send("Team must be A or B");
-        return;
-      }
-      await m.channel.send(`Set ${team} ${pos} => ${name}`);
+      if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
+      if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
+      await m.channel.send(`Set A ${pos} => ${name}`);
       return;
     } else {
       await m.channel.send("Unknown staffvsplayers command. Use: !staffvsplayers show|set|reset");
@@ -444,6 +430,11 @@ client.on("messageCreate", async m => {
       return;
     }
     await m.channel.send(`Set ${team} ${pos} => ${name}`);
+    // Also update the visible lineup text in chat by echoing the current A-blocks
+    const staffBlockText = STAFF_POS.map(p => `[ ${p} ]  ${data.STAFF.A[p] ?? '{user}'}`).join("\n");
+    const playBlockText = PLAY_POS.map(p => `[ ${p} ]  ${data.PLAYERS.A[p] ?? '{user}'}`).join("\n");
+    const updatedBlock = `### STAFF FC - A\n${staffBlockText}\n\n### PLAYERS FC - A\n${playBlockText}`;
+    await m.channel.send(updatedBlock);
     return;
   }
 
@@ -457,23 +448,24 @@ client.on("messageCreate", async m => {
       await m.channel.send("Please mention a user to remove");
       return;
     }
+    if (team !== 'A') {
+      await m.channel.send("Team must be A");
+      return;
+    }
     if (!staffLineups.has(channelId)) {
       await m.channel.send("No lineup initialized for this channel yet");
       return;
     }
     const data = staffLineups.get(channelId);
+    if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = null;
+    if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = null;
     const name = member.displayName || member.user.username;
-    if (team === 'A') {
-      if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = null;
-      if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = null;
-    } else if (team === 'B') {
-      if (STAFF_POS.includes(pos) && data.STAFF.B) data.STAFF.B[pos] = null;
-      if (PLAY_POS.includes(pos) && data.PLAYERS.B) data.PLAYERS.B[pos] = null;
-    } else {
-      await m.channel.send("Team must be A or B");
-      return;
-    }
-    await m.channel.send(`Removed ${name} from ${team} ${pos}`);
+    await m.channel.send(`Removed ${name} from A ${pos}`);
+    // Also update the visible lineup text in chat by echoing the current A-blocks
+    const staffBlockText = STAFF_POS.map(p => `[ ${p} ]  ${data.STAFF.A[p] ?? '{user}'}`).join("\n");
+    const playBlockText = PLAY_POS.map(p => `[ ${p} ]  ${data.PLAYERS.A[p] ?? '{user}'}`).join("\n");
+    const updatedBlock = `### STAFF FC - A\n${staffBlockText}\n\n### PLAYERS FC - A\n${playBlockText}`;
+    await m.channel.send(updatedBlock);
     return;
   }
 
