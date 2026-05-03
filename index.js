@@ -329,23 +329,28 @@ client.on("messageCreate", async m => {
   if (cmd === "staffvsplayers") {
     const channelId = m.channel.id;
     if (!staffLineups.has(channelId)) {
-      const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
-      const emptyPLAY_A = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
       staffLineups.set(channelId, {
-        STAFF: { A: { ...emptySTAFF_A } },
-        PLAYERS: { A: { ...emptyPLAY_A } }
+        STAFF: {
+          A: { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null },
+          B: { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null }
+        },
+        PLAYERS: {
+          A: { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null },
+          B: { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null }
+        }
       });
     }
     const sub = (args[0] || 'show').toLowerCase();
     const data = staffLineups.get(channelId);
     if (sub === 'show') {
-      // Render two blocks (Staff and Players) with 7 slots each, plain text
-      const staffLines = STAFF_POS.map(pos => `[ ${pos} ]  ${data.STAFF.A?.[pos] ?? '{@user}'}`).join("\n");
-      const playersLines = PLAY_POS.map(pos => `[ ${pos} ]  ${data.PLAYERS.A?.[pos] ?? '{@user}'}`).join("\n");
-      const staffBlock = `### 🛡️ STAFF FC\n\n\`\`\`text\n${staffLines}\n\`\`\`\n`;
-      const playersBlock = `### ⚽ PLAYERS FC\n\n\`\`\`text\n${playersLines}\n\`\`\`\n`;
-      await m.channel.send(staffBlock + "\n" + playersBlock + "\n||@everyone / @here||");
-      return;
+    // Render four blocks: STAFF A, STAFF B, PLAYERS A, PLAYERS B
+    const staffA = STAFF_POS.map(pos => `[ ${pos} ]  ${data.STAFF.A[pos] ?? '{user}'}`).join("\n");
+    const staffB = STAFF_POS.map(pos => `[ ${pos} ]  ${data.STAFF.B[pos] ?? '{user}'}`).join("\n");
+    const playersA = PLAY_POS.map(pos => `[ ${pos} ]  ${data.PLAYERS.A[pos] ?? '{user}'}`).join("\n");
+    const playersB = PLAY_POS.map(pos => `[ ${pos} ]  ${data.PLAYERS.B[pos] ?? '{user}'}`).join("\n");
+    const block = `### STAFF FC - A\n${staffA}\n\n### STAFF FC - B\n${staffB}\n\n### PLAYERS FC - A\n${playersA}\n\n### PLAYERS FC - B\n${playersB}`;
+    await m.channel.send(block);
+    return;
     } else if (sub === 'reset') {
       // reset both STAFF and PLAYERS for the channel
       const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
@@ -417,12 +422,27 @@ client.on("messageCreate", async m => {
       return;
     }
     if (!staffLineups.has(channelId)) {
-      const empty = { GK: null, CB: null, LB: null, RB: null, ST: null, LST: null, RST: null };
-      staffLineups.set(channelId, { A: { ...empty }, B: { ...empty } });
+      const emptyStaffA = { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null };
+      const emptyStaffB = { GK: null, CB: null, LB: null, RB: null, CM: null, LW: null, RW: null };
+      const emptyPlayA = { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null };
+      const emptyPlayB = { GK: null, LB: null, RB: null, CDM: null, CM: null, LW: null, RW: null };
+      staffLineups.set(channelId, {
+        STAFF: { A: { ...emptyStaffA }, B: { ...emptyStaffB } },
+        PLAYERS: { A: { ...emptyPlayA }, B: { ...emptyPlayB } }
+      });
     }
     const data = staffLineups.get(channelId);
     const name = member.displayName || member.user.username;
-    data[team][pos] = name;
+    if (team === 'A') {
+      if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
+      if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
+    } else if (team === 'B') {
+      if (STAFF_POS.includes(pos)) data.STAFF.B[pos] = name;
+      if (PLAY_POS.includes(pos)) data.PLAYERS.B[pos] = name;
+    } else {
+      await m.channel.send("Team must be A or B");
+      return;
+    }
     await m.channel.send(`Set ${team} ${pos} => ${name}`);
     return;
   }
