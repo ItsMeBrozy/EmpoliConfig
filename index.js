@@ -121,6 +121,9 @@ const PREFIX = "!";
 const VERIFICATION_ROLE_ID = "1447662023851638975";
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
+// In-memory storage for staff vs players lineups per channel
+const staffLineups = new Map();
+
 async function getRobloxUser(username) {
   try {
     const r = await fetch(`https://api.roblox.com/users/get-by-username?username=${encodeURIComponent(username)}`);
@@ -287,6 +290,46 @@ client.on("messageCreate", async m => {
   const cmd = args.shift().toLowerCase();
 
   // Removed: !verification command and its UI. Verification is handled via modal/web flow only.
+  // New: staffvsplayers command to manage two lineups
+  if (cmd === "staffvsplayers") {
+    const channelId = m.channel.id;
+    if (!staffLineups.has(channelId)) {
+      const empty = { GK: null, CB: null, LB: null, RB: null, ST: null, LST: null, RST: null };
+      staffLineups.set(channelId, { A: { ...empty }, B: { ...empty } });
+    }
+    const sub = (args[0] || 'show').toLowerCase();
+    const data = staffLineups.get(channelId);
+    if (sub === 'show') {
+      const renderTeam = t => `Team ${t} - GK:${data[t].GK ?? '-'} CB:${data[t].CB ?? '-'} LB:${data[t].LB ?? '-'} RB:${data[t].RB ?? '-'} ST:${data[t].ST ?? '-'} LST:${data[t].LST ?? '-'} RST:${data[t].RST ?? '-'}`;
+      await m.channel.send(renderTeam('A') + "\n" + renderTeam('B'));
+      return;
+    } else if (sub === 'reset') {
+      data.A = { GK: null, CB: null, LB: null, RB: null, ST: null, LST: null, RST: null };
+      data.B = { GK: null, CB: null, LB: null, RB: null, ST: null, LST: null, RST: null };
+      await m.channel.send("Lineups reset for this channel");
+      return;
+    } else if (sub === 'set') {
+      // usage: !staffvsplayers set A GK @Player
+      const team = (args[1] || 'A').toUpperCase();
+      const pos = (args[2] || '').toUpperCase();
+      const member = m.mentions?.members?.first();
+      if (!member) {
+        await m.channel.send("Please mention a user to assign");
+        return;
+      }
+      if (!['GK','CB','LB','RB','ST','LST','RST'].includes(pos)) {
+        await m.channel.send("Invalid position. Valid: GK, CB, LB, RB, ST, LST, RST");
+        return;
+      }
+      const name = member.displayName || member.user.username;
+      data[team][pos] = name;
+      await m.channel.send(`Set ${team} ${pos} => ${name}`);
+      return;
+    } else {
+      await m.channel.send("Unknown staffvsplayers command. Use: !staffvsplayers show|set|reset");
+      return;
+    }
+  }
 
 });
 
