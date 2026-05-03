@@ -330,38 +330,27 @@ client.on("messageCreate", async m => {
     const channelId = m.channel.id;
     if (!staffLineups.has(channelId)) {
       const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
-      const emptySTAFF_B = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
       const emptyPLAY_A = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
-      const emptyPLAY_B = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
-      staffLineups.set(channelId, { STAFF: { A: { ...emptySTAFF_A }, B: { ...emptySTAFF_B } }, PLAYERS: { A: { ...emptyPLAY_A }, B: { ...emptyPLAY_B } } });
+      staffLineups.set(channelId, { STAFF: { A: { ...emptySTAFF_A } }, PLAYERS: { A: { ...emptyPLAY_A } } });
     }
     const sub = (args[0] || 'show').toLowerCase();
     const data = staffLineups.get(channelId);
     if (sub === 'show') {
-      // Build ANSI blocks for STAFF and PLAYERS
+      // Render exactly 7 positions for STAFF and 7 for PLAYERS, no duplication
       const blue = "\x1b[1;34m";
       const green = "\x1b[1;32m";
       const reset = "\x1b[0m";
-      const staffA = STAFF_POS.map(p => (data.STAFF.A?.[p] ?? '{@user}'));
-      const staffB = STAFF_POS.map(p => (data.STAFF.B?.[p] ?? '{@user}'));
-      const staffLinesA = STAFF_POS.map(pos => `${blue}[ ${pos} ]${reset}  ${data.STAFF.A?.[pos] ?? '{@user}'}`).join("\n");
-      const staffLinesB = STAFF_POS.map(pos => `${blue}[ ${pos} ]${reset}  ${data.STAFF.B?.[pos] ?? '{@user}'}`).join("\n");
-      const staffBlock = `### 🛡️ STAFF FC\n\n\`\`\`ansi\n${staffLinesA}\n${staffLinesB}\n\`\`\`\n`;
-
-      // PLAYERS block with required positions
-      const playersLinesA = PLAY_POS.map(pos => `${green}[ ${pos} ]${reset}  ${data.PLAYERS.A?.[pos] ?? '{@user}'}`).join("\n");
-      const playersLinesB = PLAY_POS.map(pos => `${green}[ ${pos} ]${reset}  ${data.PLAYERS.B?.[pos] ?? '{@user}'}`).join("\n");
-      const playersBlock = `### ⚽ PLAYERS FC\n\n\`\`\`ansi\n${playersLinesA}\n${playersLinesB}\n\`\`\`\n`;
-
+      const staffLines = STAFF_POS.map(pos => `${blue}[ ${pos} ]${reset}  ${data.STAFF?.A?.[pos] ?? '{@user}'}`).join("\n");
+      const playersLines = PLAY_POS.map(pos => `${green}[ ${pos} ]${reset}  ${data.PLAYERS?.A?.[pos] ?? '{@user}'}`).join("\n");
+      const staffBlock = `### 🛡️ STAFF FC\n\n\`\`\`ansi\n${staffLines}\n\`\`\`\n`;
+      const playersBlock = `### ⚽ PLAYERS FC\n\n\`\`\`ansi\n${playersLines}\n\`\`\`\n`;
       await m.channel.send(staffBlock + "\n" + playersBlock + "\n||@everyone / @here||");
       return;
     } else if (sub === 'reset') {
       // reset both STAFF and PLAYERS for the channel
       const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
-      const emptySTAFF_B = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
       const emptyPLAY_A = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
-      const emptyPLAY_B = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
-      staffLineups.set(channelId, { STAFF: { A: { ...emptySTAFF_A }, B: { ...emptySTAFF_B } }, PLAYERS: { A: { ...emptyPLAY_A }, B: { ...emptyPLAY_B } } });
+      staffLineups.set(channelId, { STAFF: { A: { ...emptySTAFF_A } }, PLAYERS: { A: { ...emptyPLAY_A } } });
       await m.channel.send("Lineups reset for this channel");
       return;
     } else if (sub === 'set') {
@@ -378,10 +367,11 @@ client.on("messageCreate", async m => {
         return;
       }
       const name = member.displayName || member.user.username;
+      // Fill STAFF A or PLAYERS A depending on which type the position belongs to
       if (STAFF_POS.includes(pos)) {
-        data.STAFF[team][pos] = name;
+        data.STAFF.A[pos] = name;
       } else if (PLAY_POS.includes(pos)) {
-        data.PLAYERS[team][pos] = name;
+        data.PLAYERS.A[pos] = name;
       }
       await m.channel.send(`Set ${team} ${pos} => ${name}`);
       return;
