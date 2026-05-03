@@ -330,27 +330,38 @@ client.on("messageCreate", async m => {
     const channelId = m.channel.id;
     if (!staffLineups.has(channelId)) {
       const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
+      const emptySTAFF_B = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
       const emptyPLAY_A = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
-      staffLineups.set(channelId, { STAFF: { A: { ...emptySTAFF_A } }, PLAYERS: { A: { ...emptyPLAY_A } } });
+      const emptyPLAY_B = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
+      staffLineups.set(channelId, {
+        STAFF: { A: { ...emptySTAFF_A }, B: { ...emptySTAFF_B } },
+        PLAYERS: { A: { ...emptyPLAY_A }, B: { ...emptyPLAY_B } }
+      });
     }
     const sub = (args[0] || 'show').toLowerCase();
     const data = staffLineups.get(channelId);
     if (sub === 'show') {
-      // Render exactly 7 positions for STAFF and 7 for PLAYERS, no duplication
-      const blue = "\x1b[1;34m";
-      const green = "\x1b[1;32m";
-      const reset = "\x1b[0m";
-      const staffLines = STAFF_POS.map(pos => `${blue}[ ${pos} ]${reset}  ${data.STAFF?.A?.[pos] ?? '{@user}'}`).join("\n");
-      const playersLines = PLAY_POS.map(pos => `${green}[ ${pos} ]${reset}  ${data.PLAYERS?.A?.[pos] ?? '{@user}'}`).join("\n");
-      const staffBlock = `### 🛡️ STAFF FC\n\n\`\`\`ansi\n${staffLines}\n\`\`\`\n`;
-      const playersBlock = `### ⚽ PLAYERS FC\n\n\`\`\`ansi\n${playersLines}\n\`\`\`\n`;
+      const blue = "\\x1b[1;34m";
+      const green = "\\x1b[1;32m";
+      const reset = "\\x1b[0m";
+      const staffLinesA = STAFF_POS.map(pos => `${blue}[ ${pos} ]${reset}  ${data.STAFF.A?.[pos] ?? '{@user}'}`).join("\n");
+      const staffLinesB = STAFF_POS.map(pos => `${blue}[ ${pos} ]${reset}  ${data.STAFF.B?.[pos] ?? '{@user}'}`).join("\n");
+      const playersLinesA = PLAY_POS.map(pos => `${green}[ ${pos} ]${reset}  ${data.PLAYERS.A?.[pos] ?? '{@user}'}`).join("\n");
+      const playersLinesB = PLAY_POS.map(pos => `${green}[ ${pos} ]${reset}  ${data.PLAYERS.B?.[pos] ?? '{@user}'}`).join("\n");
+      const staffBlock = `### 🛡️ STAFF FC\n\n\`\`\`ansi\n${staffLinesA}\n${staffLinesB}\n\`\`\`\n`;
+      const playersBlock = `### ⚽ PLAYERS FC\n\n\`\`\`ansi\n${playersLinesA}\n${playersLinesB}\n\`\`\`\n`;
       await m.channel.send(staffBlock + "\n" + playersBlock + "\n||@everyone / @here||");
       return;
     } else if (sub === 'reset') {
       // reset both STAFF and PLAYERS for the channel
       const emptySTAFF_A = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
+      const emptySTAFF_B = { GK: null, CB: null, RB: null, LB: null, CM: null, LW: null, RW: null };
       const emptyPLAY_A = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
-      staffLineups.set(channelId, { STAFF: { A: { ...emptySTAFF_A } }, PLAYERS: { A: { ...emptyPLAY_A } } });
+      const emptyPLAY_B = { GK: null, RB: null, LB: null, CDM: null, CM: null, LW: null, RW: null };
+      staffLineups.set(channelId, {
+        STAFF: { A: { ...emptySTAFF_A }, B: { ...emptySTAFF_B } },
+        PLAYERS: { A: { ...emptyPLAY_A }, B: { ...emptyPLAY_B } }
+      });
       await m.channel.send("Lineups reset for this channel");
       return;
     } else if (sub === 'set') {
@@ -362,16 +373,18 @@ client.on("messageCreate", async m => {
         await m.channel.send("Please mention a user to assign");
         return;
       }
-      if (!(STAFF_POS.includes(pos) || PLAY_POS.includes(pos))) {
-        await m.channel.send("Invalid position. Valid: GK, CB, LB, RB, ST, LST, RST, CDM, CM");
-        return;
-      }
       const name = member.displayName || member.user.username;
-      // Fill STAFF A or PLAYERS A depending on which type the position belongs to
-      if (STAFF_POS.includes(pos)) {
-        data.STAFF.A[pos] = name;
-      } else if (PLAY_POS.includes(pos)) {
-        data.PLAYERS.A[pos] = name;
+      if (team === 'A') {
+        // STAFF.A and PLAYERS.A
+        if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
+        if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
+      } else if (team === 'B') {
+        // STAFF.B and PLAYERS.B
+        if (STAFF_POS.includes(pos)) data.STAFF.B[pos] = name;
+        if (PLAY_POS.includes(pos)) data.PLAYERS.B[pos] = name;
+      } else {
+        await m.channel.send("Team must be A or B");
+        return;
       }
       await m.channel.send(`Set ${team} ${pos} => ${name}`);
       return;
