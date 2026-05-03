@@ -123,6 +123,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
 // In-memory storage for staff vs players lineups per channel
 const staffLineups = new Map();
+const POSITIONS = ["GK", "CB", "LB", "RB", "ST", "LST", "RST"];
 
 async function getRobloxUser(username) {
   try {
@@ -184,6 +185,38 @@ client.on("interactionCreate", async i => {
       modal.addComponents(new ActionRowBuilder().addComponents(input));
       await i.showModal(modal);
       return;
+    }
+
+    // Slash command handler for add (staff vs players)
+    if (typeof i.isChatInputCommand === 'function' && i.isChatInputCommand()) {
+      if (i.commandName === 'add') {
+        const team = ((i.options.getString('team') ?? 'A').toUpperCase());
+        const pos = ((i.options.getString('position') ?? '').toUpperCase());
+        const user = i.options.getUser('user');
+        if (!user) {
+          await i.reply({ content: 'Please select a user', ephemeral: true });
+          return;
+        }
+        if (!['A','B'].includes(team)) {
+          await i.reply({ content: 'Team must be A or B', ephemeral: true });
+          return;
+        }
+        if (!POSITIONS.includes(pos)) {
+          await i.reply({ content: 'Invalid position', ephemeral: true });
+          return;
+        }
+        const channelId = i.channelId;
+        if (!staffLineups.has(channelId)) {
+          const empty = { GK: null, CB: null, LB: null, RB: null, ST: null, LST: null, RST: null };
+          staffLineups.set(channelId, { A: { ...empty }, B: { ...empty } });
+        }
+        const member = await i.guild.members.fetch(user.id);
+        const name = member.displayName || member.user.username;
+        const data = staffLineups.get(channelId);
+        data[team][pos] = name;
+        await i.reply({ content: `Set ${team} ${pos} => ${name}`, ephemeral: true });
+        return;
+      }
     }
 
     if (i.isModalSubmit() && i.customId === "verify_username_modal") {
@@ -329,6 +362,45 @@ client.on("messageCreate", async m => {
       await m.channel.send("Unknown staffvsplayers command. Use: !staffvsplayers show|set|reset");
       return;
     }
+  }
+
+  // Add command: !add A GK @User
+  if (cmd === "add") {
+    const channelId = m.channel.id;
+    const team = ((args[0] || 'A').toUpperCase());
+    const pos = ((args[1] || '').toUpperCase());
+    let member = m.mentions?.members?.first();
+    if (!member) {
+      // Try to resolve by a name in brackets like [user] or {user}
+      const rawName = (args.slice(2).join(' ') || '').replace(/[\[\{\}\]]/g, '').trim();
+      if (rawName) {
+        member = m.guild?.members.cache.find(x =>
+          (x.displayName?.toLowerCase() === rawName.toLowerCase()) ||
+          (x.user?.username.toLowerCase() === rawName.toLowerCase())
+        );
+      }
+    }
+    if (!['A','B'].includes(team)) {
+      await m.channel.send("Team must be A or B. Example: !add A GK @User");
+      return;
+    }
+    if (!POSITIONS.includes(pos)) {
+      await m.channel.send("Invalid position. Valid: GK, CB, LB, RB, ST, LST, RST");
+      return;
+    }
+    if (!member) {
+      await m.channel.send("Please mention a user to assign");
+      return;
+    }
+    if (!staffLineups.has(channelId)) {
+      const empty = { GK: null, CB: null, LB: null, RB: null, ST: null, LST: null, RST: null };
+      staffLineups.set(channelId, { A: { ...empty }, B: { ...empty } });
+    }
+    const data = staffLineups.get(channelId);
+    const name = member.displayName || member.user.username;
+    data[team][pos] = name;
+    await m.channel.send(`Set ${team} ${pos} => ${name}`);
+    return;
   }
 
 });
