@@ -447,8 +447,8 @@ client.on("messageCreate", async m => {
       if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = null;
       if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = null;
     } else if (team === 'B') {
-      if (STAFF_POS.includes(pos)) data.STAFF.B?.[pos] = null;
-      if (PLAY_POS.includes(pos)) data.PLAYERS.B?.[pos] = null;
+      if (STAFF_POS.includes(pos) && data.STAFF.B) data.STAFF.B[pos] = null;
+      if (PLAY_POS.includes(pos) && data.PLAYERS.B) data.PLAYERS.B[pos] = null;
     } else {
       await m.channel.send("Team must be A or B");
       return;
