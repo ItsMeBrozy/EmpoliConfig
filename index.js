@@ -346,8 +346,7 @@ client.on("messageCreate", async m => {
   const args = m.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift().toLowerCase();
 
-  // Removed: !verification command and its UI. Verification is handled via modal/web flow only.
-  // New: staffvsplayers command to manage two lineups
+  // staffvsplayers command to manage two lineups
   if (cmd === "staffvsplayers") {
     const channelId = m.channel.id;
     const sub = (args[0] || 'show').toLowerCase();
@@ -398,33 +397,13 @@ client.on("messageCreate", async m => {
   }
 
   // Add command: !add A GK @User
-    if (cmd === "add") {
-    const channelId = m.channel.id;
-    const team = ((args[0] || 'A').toUpperCase());
-    const pos = ((args[1] || '').toUpperCase());
-    let member = m.mentions?.members?.first();
-    if (!member) {
-      // Try to resolve by a name in brackets like [user] or {user}
-      const rawName = (args.slice(2).join(' ') || '').replace(/[\[\{\}\]]/g, '').trim();
-      if (rawName) {
-        member = m.guild?.members.cache.find(x =>
-          (x.displayName?.toLowerCase() === rawName.toLowerCase()) ||
-          (x.user?.username.toLowerCase() === rawName.toLowerCase())
-        );
-      }
-    }
-    if (!['A','B'].includes(team)) {
-      await m.channel.send("Team must be A or B. Example: !add A GK @User");
-      return;
-    }
-    if (!POSITIONS.includes(pos)) {
   if (cmd === "add") {
     const channelId = m.channel.id;
     const team = ((args[0] || 'A').toUpperCase());
     const pos = ((args[1] || '').toUpperCase());
     const member = m.mentions?.members?.first();
 
-    if (!['A'].includes(team)) {
+    if (team !== 'A') {
       await m.channel.send("Team must be A. Example: !add A GK @User");
       return;
     }
@@ -442,16 +421,15 @@ client.on("messageCreate", async m => {
     }
     const data = staffLineups.get(channelId);
     const name = `<@${member.id}>`;
-    if (team === 'A') {
-      if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
-      if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
-    }
+    if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
+    if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
+    
     await m.channel.send(`Set A ${pos} => ${name}`);
     await updateLineupMessage(m.channel, data);
     return;
   }
 
-  // Remove a user from a position
+  // Remove command: !remove A GK @User
   if (cmd === "remove") {
     const channelId = m.channel.id;
     const team = ((args[0] || 'A').toUpperCase());
