@@ -461,8 +461,6 @@ client.on("messageCreate", async m => {
 
 });
 
-});
-
 console.log("Connecting bot...");
 console.log("BOT_TOKEN exists:", !!process.env.BOT_TOKEN);
 console.log("DISCORD_TOKEN exists:", !!process.env.DISCORD_TOKEN);
