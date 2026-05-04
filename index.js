@@ -366,95 +366,100 @@ client.on("messageCreate", async m => {
       const sent = await m.channel.send(content);
       lineupMessages.set(channelId, sent.id);
       return;
-    } else if (sub === 'set') {
-      // usage: !staffvsplayers set A GK @User
-      if (!staffLineups.has(channelId)) {
-        await m.channel.send("Please run !staffvsplayers first to initialize.");
-        return;
-      }
-      const data = staffLineups.get(channelId);
-      const team = (args[1] || 'A').toUpperCase();
-      const pos = (args[2] || '').toUpperCase();
-      const member = m.mentions?.members?.first();
-      if (team !== 'A') {
-        await m.channel.send("Team must be A");
-        return;
-      }
-      if (!member) {
-        await m.channel.send("Please mention a user to assign");
-        return;
-      }
-      const name = `<@${member.id}>`;
-      if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
-      if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
-      await m.channel.send(`Set A ${pos} => ${name}`);
-      await updateLineupMessage(m.channel, data);
-      return;
     } else {
-      await m.channel.send("Unknown staffvsplayers command. Use: !staffvsplayers show|set|reset");
+      await m.channel.send("Unknown command. Use: !staffvsplayers show|reset");
       return;
     }
   }
 
-  // Add command: !add A GK @User
-  if (cmd === "add") {
+  // STM command: !stm @user A/B position
+  if (cmd === "stm") {
     const channelId = m.channel.id;
-    const team = ((args[0] || 'A').toUpperCase());
-    const pos = ((args[1] || '').toUpperCase());
     const member = m.mentions?.members?.first();
+    const team = (args[1] || '').toUpperCase();
+    const pos = (args[2] || '').toUpperCase();
 
-    if (team !== 'A') {
-      await m.channel.send("Team must be A. Example: !add A GK @User");
+    if (!member) {
+      await m.channel.send("Please mention a user. Usage: !stm @user A/B position");
+      return;
+    }
+    if (!['A', 'B'].includes(team)) {
+      await m.channel.send("Team must be A (Staff) or B (Players).");
       return;
     }
     if (!STAFF_POS.includes(pos) && !PLAY_POS.includes(pos)) {
       await m.channel.send("Invalid position.");
       return;
     }
-    if (!member) {
-      await m.channel.send("Please mention a user to assign");
-      return;
-    }
     if (!staffLineups.has(channelId)) {
       await m.channel.send("Please run !staffvsplayers first to initialize.");
       return;
     }
+
     const data = staffLineups.get(channelId);
     const name = `<@${member.id}>`;
-    if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = name;
-    if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = name;
+
+    if (team === 'A') {
+      if (!STAFF_POS.includes(pos)) {
+        await m.channel.send(`Position ${pos} is not valid for STAFF (Team A).`);
+        return;
+      }
+      data.STAFF.A[pos] = name;
+    } else {
+      if (!PLAY_POS.includes(pos)) {
+        await m.channel.send(`Position ${pos} is not valid for PLAYERS (Team B).`);
+        return;
+      }
+      data.PLAYERS.A[pos] = name;
+    }
     
-    await m.channel.send(`Set A ${pos} => ${name}`);
+    await m.channel.send(`Set Team ${team} ${pos} => ${name}`);
     await updateLineupMessage(m.channel, data);
     return;
   }
 
-  // Remove command: !remove A GK @User
+  // Remove command: !remove @user
   if (cmd === "remove") {
     const channelId = m.channel.id;
-    const team = ((args[0] || 'A').toUpperCase());
-    const pos = ((args[1] || '').toUpperCase());
     const member = m.mentions?.members?.first();
     if (!member) {
-      await m.channel.send("Please mention a user to remove");
-      return;
-    }
-    if (team !== 'A') {
-      await m.channel.send("Team must be A");
+      await m.channel.send("Please mention a user to remove.");
       return;
     }
     if (!staffLineups.has(channelId)) {
-      await m.channel.send("No lineup initialized for this channel yet. Use !staffvsplayers");
+      await m.channel.send("No lineup initialized for this channel yet.");
       return;
     }
+
     const data = staffLineups.get(channelId);
-    if (STAFF_POS.includes(pos)) data.STAFF.A[pos] = null;
-    if (PLAY_POS.includes(pos)) data.PLAYERS.A[pos] = null;
-    const name = `<@${member.id}>`;
-    await m.channel.send(`Removed ${name} from A ${pos}`);
-    await updateLineupMessage(m.channel, data);
+    const targetPing = `<@${member.id}>`;
+    let found = false;
+
+    // Search and remove from STAFF
+    for (const pos in data.STAFF.A) {
+      if (data.STAFF.A[pos] === targetPing) {
+        data.STAFF.A[pos] = null;
+        found = true;
+      }
+    }
+    // Search and remove from PLAYERS
+    for (const pos in data.PLAYERS.A) {
+      if (data.PLAYERS.A[pos] === targetPing) {
+        data.PLAYERS.A[pos] = null;
+        found = true;
+      }
+    }
+
+    if (found) {
+      await m.channel.send(`Removed ${targetPing} from all positions.`);
+      await updateLineupMessage(m.channel, data);
+    } else {
+      await m.channel.send(`${targetPing} was not found in the lineup.`);
+    }
     return;
   }
+
+});
 
 });
 
