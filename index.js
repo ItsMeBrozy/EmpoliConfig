@@ -124,6 +124,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 // In-memory storage for staff vs players lineups per channel
 const staffLineups = new Map();
 const lineupMessages = new Map();
+const activityChecks = new Map();
 
 const POSITIONS = ["GK", "CB", "LB", "RB", "ST", "LST", "RST"];
 const STAFF_POS = ["GK", "CB", "RB", "LB", "CM", "LW", "RW"];
@@ -239,6 +240,50 @@ client.on("interactionCreate", async i => {
         const data = staffLineups.get(channelId);
         data[team][pos] = name;
         await i.reply({ content: `Set ${team} ${pos} => ${name}`, ephemeral: true });
+        return;
+      }
+
+      if (i.commandName === 'activitycheck_setup') {
+        const time = i.options.getString('time');
+        const ms = parseDuration(time);
+        if (!ms) {
+          await i.reply({ content: "❌ Invalid time format. Use e.g. 1h, 24h, 30m", ephemeral: true });
+          return;
+        }
+
+        const channelId = i.channelId;
+        if (activityChecks.has(channelId)) {
+          clearInterval(activityChecks.get(channelId));
+        }
+
+        const sendCheck = async () => {
+          try {
+            const channel = await client.channels.fetch(channelId);
+            if (channel) {
+              await channel.send("🔔 **Activity Check!**\nPlease react to this message to confirm you are active! @everyone");
+            }
+          } catch (e) {
+            console.error("Activity check failed:", e);
+          }
+        };
+
+        const intervalId = setInterval(sendCheck, ms);
+        activityChecks.set(channelId, intervalId);
+
+        await i.reply({ content: `✅ Activity check has been set up every ${time}.`, ephemeral: true });
+        await sendCheck(); // Send first one immediately
+        return;
+      }
+
+      if (i.commandName === 'activitycheck_stop') {
+        const channelId = i.channelId;
+        if (activityChecks.has(channelId)) {
+          clearInterval(activityChecks.get(channelId));
+          activityChecks.delete(channelId);
+          await i.reply({ content: "🛑 Activity check stopped for this channel.", ephemeral: true });
+        } else {
+          await i.reply({ content: "❌ No active check found in this channel.", ephemeral: true });
+        }
         return;
       }
     }
@@ -459,6 +504,51 @@ client.on("messageCreate", async m => {
     return;
   }
 
+  // Activity check prefix commands
+  if (cmd === "activitycheck-setup") {
+    const time = args[0];
+    const ms = parseDuration(time);
+    if (!ms) {
+      await m.channel.send("❌ Invalid time format. Use e.g. 1h, 24h, 30m");
+      return;
+    }
+
+    const channelId = m.channel.id;
+    if (activityChecks.has(channelId)) {
+      clearInterval(activityChecks.get(channelId));
+    }
+
+    const sendCheck = async () => {
+      try {
+        const channel = await client.channels.fetch(channelId);
+        if (channel) {
+          await channel.send("🔔 **Activity Check!**\nPlease react to this message to confirm you are active! @everyone");
+        }
+      } catch (e) {
+        console.error("Activity check failed:", e);
+      }
+    };
+
+    const intervalId = setInterval(sendCheck, ms);
+    activityChecks.set(channelId, intervalId);
+
+    await m.channel.send(`✅ Activity check has been set up every ${time}.`);
+    await sendCheck();
+    return;
+  }
+
+  if (cmd === "activitycheck-stop") {
+    const channelId = m.channel.id;
+    if (activityChecks.has(channelId)) {
+      clearInterval(activityChecks.get(channelId));
+      activityChecks.delete(channelId);
+      await m.channel.send("🛑 Activity check stopped for this channel.");
+    } else {
+      await m.channel.send("❌ No active check found in this channel.");
+    }
+    return;
+  }
+
 });
 
 console.log("Connecting bot...");
@@ -471,3 +561,15 @@ if (TOKEN) {
   console.error("❌ No token found! Set BOT_TOKEN or DISCORD_TOKEN in Railway variables.");
 }
 if (TOKEN) client.login(TOKEN).catch(e => console.error("Login error:", e.message));
+
+function parseDuration(str) {
+  if (!str) return null;
+  const match = str.match(/^(\d+)(m|h|d)$/i);
+  if (!match) return null;
+  const num = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit === 'm') return num * 60000;
+  if (unit === 'h') return num * 3600000;
+  if (unit === 'd') return num * 86400000;
+  return null;
+}
