@@ -611,17 +611,30 @@ client.on("messageCreate", async m => {
     return;
   }
 
-  if (cmd === "activitycheck") {
-    const hasRole = m.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
-    if (!hasRole) return m.channel.send("❌ You do not have permission to use this command.");
-
-    await m.channel.send("Sending activity check to the dedicated channel...");
-    await sendActivityCheck();
-    return;
-  }
-
   if (cmd === "sync") {
     const commands = [
+      {
+        name: 'start',
+        description: 'Start the activity check loop',
+        options: [
+          {
+            name: 'time',
+            type: 3,
+            description: 'Interval (e.g. 24h, 1h)',
+            required: true
+          },
+          {
+            name: 'channel',
+            type: 3,
+            description: 'Target channel',
+            required: true,
+            choices: [
+              { name: 'Channel 1 (1485778074275680490)', value: '1485778074275680490' },
+              { name: 'Channel 2 (1499475855372583003)', value: '1499475855372583003' }
+            ]
+          }
+        ]
+      },
       {
         name: 'stop',
         description: 'Stop the 24h activity check loop'
