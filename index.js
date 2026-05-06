@@ -560,6 +560,29 @@ client.on("messageCreate", async m => {
     return;
   }
 
+  if (cmd === "stop") {
+    const hasRole = m.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
+    if (!hasRole) return m.channel.send("❌ You do not have permission to use this command.");
+
+    if (activityInterval) {
+      clearInterval(activityInterval);
+      activityInterval = null;
+      await m.channel.send("🛑 Activity check loop has been stopped.");
+    } else {
+      await m.channel.send("❌ No active activity check loop is running.");
+    }
+    return;
+  }
+
+  if (cmd === "activitycheck") {
+    const hasRole = m.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
+    if (!hasRole) return m.channel.send("❌ You do not have permission to use this command.");
+
+    await m.channel.send("Sending activity check to the dedicated channel...");
+    await sendActivityCheck();
+    return;
+  }
+
   if (cmd === "sync") {
     const commands = [
       {
