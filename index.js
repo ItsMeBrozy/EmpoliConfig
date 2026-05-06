@@ -542,13 +542,20 @@ client.on("messageCreate", async m => {
     const hasRole = m.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
     if (!hasRole) return m.channel.send("❌ You do not have permission to use this command.");
 
+    const timeStr = args[0] || "24h";
+    const ms = parseDuration(timeStr);
+    
+    if (!ms) {
+      return m.channel.send("❌ Invalid time format. Use e.g. `!start 10s`, `!start 30m`, `!start 1h`, `!start 1d`.");
+    }
+
     if (activityInterval) clearInterval(activityInterval);
 
     activityInterval = setInterval(() => {
       sendActivityCheck();
-    }, 24 * 60 * 60 * 1000);
+    }, ms);
 
-    await m.channel.send("✅ **Activity Check Loop Started!** It will now post every 24 hours in the dedicated channel. Sending the first one now...");
+    await m.channel.send(`✅ **Activity Check Loop Started!** It will now post every **${timeStr}** in the dedicated channel. Sending the first one now...`);
     await sendActivityCheck();
     return;
   }
@@ -592,3 +599,16 @@ if (TOKEN) {
   console.error("❌ No token found! Set BOT_TOKEN or DISCORD_TOKEN in Railway variables.");
 }
 if (TOKEN) client.login(TOKEN).catch(e => console.error("Login error:", e.message));
+
+function parseDuration(str) {
+  if (!str) return null;
+  const match = str.match(/^(\d+)([smhd])$/i);
+  if (!match) return null;
+  const num = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit === 's') return num * 1000;
+  if (unit === 'm') return num * 60000;
+  if (unit === 'h') return num * 3600000;
+  if (unit === 'd') return num * 86400000;
+  return null;
+}
