@@ -127,7 +127,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const staffLineups = new Map();
 const lineupMessages = new Map();
 
-const ACTIVITY_CHANNEL_ID = "1499475855372583003";
+const ACTIVITY_CHANNEL_ID = "1485778074275680490";
 const ALLOWED_ROLES = ["1447662023851638975", "1489650850916733129"];
 let activeCheckMessageId = null;
 let activeCheckWinners = [];
@@ -139,7 +139,7 @@ function getActivityCheckContent(winners = []) {
   const p3 = winners[2] ? `<@${winners[2]}>` : "@user";
 
   return `@everyone
-# ⚽ Empoli FC's Activity Check! ⚽
+# ⚽ Steinbrücke's Activity Check! ⚽
 > ⭒━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⭒
 > React With : ✅
 > Ping : @everyone 
