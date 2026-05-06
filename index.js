@@ -549,6 +549,38 @@ client.on("messageCreate", async m => {
     return;
   }
 
+  if (cmd === "sync") {
+    const commands = [
+      {
+        name: 'activitycheck_setup',
+        description: 'Set up an automatic activity check message',
+        options: [{ name: 'time', type: 3, description: 'Interval (e.g. 1h, 24h, 30m)', required: true }]
+      },
+      {
+        name: 'activitycheck_stop',
+        description: 'Stop the activity check in this channel'
+      },
+      {
+        name: 'add',
+        description: 'Add a player to the lineup',
+        options: [
+          { name: 'user', type: 6, description: 'User to add', required: true },
+          { name: 'team', type: 3, description: 'Team A or B', required: true },
+          { name: 'position', type: 3, description: 'Position (e.g. GK, ST)', required: true }
+        ]
+      }
+    ];
+
+    try {
+      await m.guild.commands.set(commands);
+      await m.channel.send("✅ Slash commands synced for this server! (Try typing `/` now)");
+    } catch (e) {
+      console.error(e);
+      await m.channel.send("❌ Failed to sync commands. Make sure the bot has `applications.commands` scope and administrator permissions.");
+    }
+    return;
+  }
+
 });
 
 console.log("Connecting bot...");
