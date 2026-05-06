@@ -127,10 +127,11 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const staffLineups = new Map();
 const lineupMessages = new Map();
 
-const ACTIVITY_CHANNEL_ID = "1485778074275680490";
+const ACTIVITY_CHANNEL_ID = "1499475855372583003";
 const ALLOWED_ROLES = ["1447662023851638975", "1489650850916733129"];
 let activeCheckMessageId = null;
 let activeCheckWinners = [];
+let activityInterval = null;
 
 function getActivityCheckContent(winners = []) {
   const p1 = winners[0] ? `<@${winners[0]}>` : "@user";
@@ -230,11 +231,6 @@ async function getRobloxProfile(id) {
 
 client.on("ready", () => {
   console.log("Logged in as " + client.user.tag);
-  
-  // Auto-post every 24h
-  setInterval(() => {
-    sendActivityCheck();
-  }, 24 * 60 * 60 * 1000);
 });
 
 client.on("messageReactionAdd", async (reaction, user) => {
@@ -307,15 +303,20 @@ client.on("interactionCreate", async i => {
         return;
       }
 
-      if (i.commandName === 'activitycheck') {
+      if (i.commandName === 'stop') {
         const hasRole = i.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
         if (!hasRole) {
           await i.reply({ content: "❌ You do not have permission to use this command.", ephemeral: true });
           return;
         }
 
-        await i.reply({ content: "Sending activity check to the dedicated channel...", ephemeral: true });
-        await sendActivityCheck();
+        if (activityInterval) {
+          clearInterval(activityInterval);
+          activityInterval = null;
+          await i.reply({ content: "🛑 Activity check loop has been stopped.", ephemeral: true });
+        } else {
+          await i.reply({ content: "❌ No active activity check loop is running.", ephemeral: true });
+        }
         return;
       }
     }
@@ -536,11 +537,27 @@ client.on("messageCreate", async m => {
     return;
   }
 
+  // Activity Check Control Commands
+  if (cmd === "start") {
+    const hasRole = m.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
+    if (!hasRole) return m.channel.send("❌ You do not have permission to use this command.");
+
+    if (activityInterval) clearInterval(activityInterval);
+
+    activityInterval = setInterval(() => {
+      sendActivityCheck();
+    }, 24 * 60 * 60 * 1000);
+
+    await m.channel.send("✅ **Activity Check Loop Started!** It will now post every 24 hours in the dedicated channel. Sending the first one now...");
+    await sendActivityCheck();
+    return;
+  }
+
   if (cmd === "sync") {
     const commands = [
       {
-        name: 'activitycheck',
-        description: 'Send an activity check to the dedicated channel'
+        name: 'stop',
+        description: 'Stop the 24h activity check loop'
       },
       {
         name: 'add',
