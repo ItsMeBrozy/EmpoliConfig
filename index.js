@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { Client, GatewayIntentBits, ButtonStyle, ButtonBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, ButtonStyle, ButtonBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalBuilder, PermissionFlagsBits, EmbedBuilder, Partials } from 'discord.js';
 import { Agent, setGlobalDispatcher } from 'undici';
 
 setGlobalDispatcher(new Agent({ connect: { timeout: 60000 } }));
@@ -112,8 +112,10 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [Partials.Message, Partials.Reaction, Partials.User]
 });
 
 const TOKEN = process.env.DISCORD_TOKEN?.trim();
@@ -124,7 +126,46 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 // In-memory storage for staff vs players lineups per channel
 const staffLineups = new Map();
 const lineupMessages = new Map();
-const activityChecks = new Map();
+
+const ACTIVITY_CHANNEL_ID = "1485778074275680490";
+const ALLOWED_ROLES = ["1447662023851638975", "1489650850916733129"];
+let activeCheckMessageId = null;
+let activeCheckWinners = [];
+
+function getActivityCheckContent(winners = []) {
+  const p1 = winners[0] ? `<@${winners[0]}>` : "@user";
+  const p2 = winners[1] ? `<@${winners[1]}>` : "@user";
+  const p3 = winners[2] ? `<@${winners[2]}>` : "@user";
+
+  return `@everyone
+# ⚽ Empoli FC's Activity Check! ⚽
+> ⭒━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⭒
+> React With : ✅
+> Ping : @everyone 
+> -# Every 24h
+> ⭒━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⭒
+> 
+> 🥇 -  ${p1}
+> 
+> 🥈 - ${p2}
+> 
+> 🥉 - ${p3} `;
+}
+
+async function sendActivityCheck() {
+  try {
+    const channel = await client.channels.fetch(ACTIVITY_CHANNEL_ID);
+    if (!channel) return;
+    
+    activeCheckWinners = [];
+    const content = getActivityCheckContent(activeCheckWinners);
+    const msg = await channel.send(content);
+    await msg.react("✅");
+    activeCheckMessageId = msg.id;
+  } catch (e) {
+    console.error("Failed to send activity check:", e);
+  }
+}
 
 const POSITIONS = ["GK", "CB", "LB", "RB", "ST", "LST", "RST"];
 const STAFF_POS = ["GK", "CB", "RB", "LB", "CM", "LW", "RW"];
@@ -189,6 +230,29 @@ async function getRobloxProfile(id) {
 
 client.on("ready", () => {
   console.log("Logged in as " + client.user.tag);
+  
+  // Auto-post every 24h
+  setInterval(() => {
+    sendActivityCheck();
+  }, 24 * 60 * 60 * 1000);
+});
+
+client.on("messageReactionAdd", async (reaction, user) => {
+  if (user.bot) return;
+  if (reaction.message.id !== activeCheckMessageId) return;
+  if (reaction.emoji.name !== "✅") return;
+  
+  if (activeCheckWinners.includes(user.id)) return;
+  if (activeCheckWinners.length >= 3) return;
+  
+  activeCheckWinners.push(user.id);
+  
+  try {
+    const newContent = getActivityCheckContent(activeCheckWinners);
+    await reaction.message.edit(newContent);
+  } catch (e) {
+    console.error("Failed to update activity check winners:", e);
+  }
 });
 
 client.on("interactionCreate", async i => {
@@ -243,47 +307,15 @@ client.on("interactionCreate", async i => {
         return;
       }
 
-      if (i.commandName === 'activitycheck_setup') {
-        const time = i.options.getString('time');
-        const ms = parseDuration(time);
-        if (!ms) {
-          await i.reply({ content: "❌ Invalid time format. Use e.g. 1h, 24h, 30m", ephemeral: true });
+      if (i.commandName === 'activitycheck') {
+        const hasRole = i.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
+        if (!hasRole) {
+          await i.reply({ content: "❌ You do not have permission to use this command.", ephemeral: true });
           return;
         }
 
-        const channelId = i.channelId;
-        if (activityChecks.has(channelId)) {
-          clearInterval(activityChecks.get(channelId));
-        }
-
-        const sendCheck = async () => {
-          try {
-            const channel = await client.channels.fetch(channelId);
-            if (channel) {
-              await channel.send("🔔 **Activity Check!**\nPlease react to this message to confirm you are active! @everyone");
-            }
-          } catch (e) {
-            console.error("Activity check failed:", e);
-          }
-        };
-
-        const intervalId = setInterval(sendCheck, ms);
-        activityChecks.set(channelId, intervalId);
-
-        await i.reply({ content: `✅ Activity check has been set up every ${time}.`, ephemeral: true });
-        await sendCheck(); // Send first one immediately
-        return;
-      }
-
-      if (i.commandName === 'activitycheck_stop') {
-        const channelId = i.channelId;
-        if (activityChecks.has(channelId)) {
-          clearInterval(activityChecks.get(channelId));
-          activityChecks.delete(channelId);
-          await i.reply({ content: "🛑 Activity check stopped for this channel.", ephemeral: true });
-        } else {
-          await i.reply({ content: "❌ No active check found in this channel.", ephemeral: true });
-        }
+        await i.reply({ content: "Sending activity check to the dedicated channel...", ephemeral: true });
+        await sendActivityCheck();
         return;
       }
     }
@@ -504,61 +536,11 @@ client.on("messageCreate", async m => {
     return;
   }
 
-  // Activity check prefix commands
-  if (cmd === "activitycheck-setup") {
-    const time = args[0];
-    const ms = parseDuration(time);
-    if (!ms) {
-      await m.channel.send("❌ Invalid time format. Use e.g. 1h, 24h, 30m");
-      return;
-    }
-
-    const channelId = m.channel.id;
-    if (activityChecks.has(channelId)) {
-      clearInterval(activityChecks.get(channelId));
-    }
-
-    const sendCheck = async () => {
-      try {
-        const channel = await client.channels.fetch(channelId);
-        if (channel) {
-          await channel.send("🔔 **Activity Check!**\nPlease react to this message to confirm you are active! @everyone");
-        }
-      } catch (e) {
-        console.error("Activity check failed:", e);
-      }
-    };
-
-    const intervalId = setInterval(sendCheck, ms);
-    activityChecks.set(channelId, intervalId);
-
-    await m.channel.send(`✅ Activity check has been set up every ${time}.`);
-    await sendCheck();
-    return;
-  }
-
-  if (cmd === "activitycheck-stop") {
-    const channelId = m.channel.id;
-    if (activityChecks.has(channelId)) {
-      clearInterval(activityChecks.get(channelId));
-      activityChecks.delete(channelId);
-      await m.channel.send("🛑 Activity check stopped for this channel.");
-    } else {
-      await m.channel.send("❌ No active check found in this channel.");
-    }
-    return;
-  }
-
   if (cmd === "sync") {
     const commands = [
       {
-        name: 'activitycheck_setup',
-        description: 'Set up an automatic activity check message',
-        options: [{ name: 'time', type: 3, description: 'Interval (e.g. 1h, 24h, 30m)', required: true }]
-      },
-      {
-        name: 'activitycheck_stop',
-        description: 'Stop the activity check in this channel'
+        name: 'activitycheck',
+        description: 'Send an activity check to the dedicated channel'
       },
       {
         name: 'add',
@@ -593,15 +575,3 @@ if (TOKEN) {
   console.error("❌ No token found! Set BOT_TOKEN or DISCORD_TOKEN in Railway variables.");
 }
 if (TOKEN) client.login(TOKEN).catch(e => console.error("Login error:", e.message));
-
-function parseDuration(str) {
-  if (!str) return null;
-  const match = str.match(/^(\d+)(m|h|d)$/i);
-  if (!match) return null;
-  const num = parseInt(match[1]);
-  const unit = match[2].toLowerCase();
-  if (unit === 'm') return num * 60000;
-  if (unit === 'h') return num * 3600000;
-  if (unit === 'd') return num * 86400000;
-  return null;
-}
