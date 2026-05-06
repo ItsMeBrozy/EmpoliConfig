@@ -127,11 +127,11 @@ const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const staffLineups = new Map();
 const lineupMessages = new Map();
 
-const ACTIVITY_CHANNEL_ID = "1485778074275680490";
 const ALLOWED_ROLES = ["1447662023851638975", "1489650850916733129"];
 let activeCheckMessageId = null;
 let activeCheckWinners = [];
 let activityInterval = null;
+let currentActivityChannelId = "1485778074275680490";
 
 function getActivityCheckContent(winners = []) {
   const p1 = winners[0] ? `<@${winners[0]}>` : "@user";
@@ -153,15 +153,16 @@ function getActivityCheckContent(winners = []) {
 > 🥉 - ${p3} `;
 }
 
-async function sendActivityCheck() {
+async function sendActivityCheck(channelId) {
   try {
-    const channel = await client.channels.fetch(ACTIVITY_CHANNEL_ID);
+    const targetId = channelId || currentActivityChannelId;
+    const channel = await client.channels.fetch(targetId);
     if (!channel) return;
     
     activeCheckWinners = [];
     const content = getActivityCheckContent(activeCheckWinners);
     const msg = await channel.send(content);
-    await msg.react("✅");
+    await msg.react("✅").catch(err => console.error("Reaction failed:", err));
     activeCheckMessageId = msg.id;
   } catch (e) {
     console.error("Failed to send activity check:", e);
@@ -300,6 +301,34 @@ client.on("interactionCreate", async i => {
         const data = staffLineups.get(channelId);
         data[team][pos] = name;
         await i.reply({ content: `Set ${team} ${pos} => ${name}`, ephemeral: true });
+        return;
+      }
+
+      if (i.commandName === 'start') {
+        const hasRole = i.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id));
+        if (!hasRole) {
+          await i.reply({ content: "❌ You do not have permission to use this command.", ephemeral: true });
+          return;
+        }
+
+        const timeStr = i.options.getString('time');
+        const channelId = i.options.getString('channel');
+        const ms = parseDuration(timeStr);
+
+        if (!ms) {
+          await i.reply({ content: "❌ Invalid time format.", ephemeral: true });
+          return;
+        }
+
+        if (activityInterval) clearInterval(activityInterval);
+        currentActivityChannelId = channelId;
+
+        activityInterval = setInterval(() => {
+          sendActivityCheck(currentActivityChannelId);
+        }, ms);
+
+        await i.reply({ content: `✅ **Activity Check Loop Started!** Interval: ${timeStr}, Channel: <#${channelId}>.`, ephemeral: true });
+        await sendActivityCheck(currentActivityChannelId);
         return;
       }
 
@@ -549,14 +578,22 @@ client.on("messageCreate", async m => {
       return m.channel.send("❌ Invalid time format. Use e.g. `!start 10s`, `!start 30m`, `!start 1h`, `!start 1d`.");
     }
 
+    // Channel selection: !start 24h #channel
+    let targetChannelId = currentActivityChannelId;
+    if (args[1]) {
+      const match = args[1].match(/<#(\d+)>/);
+      targetChannelId = match ? match[1] : args[1];
+    }
+
     if (activityInterval) clearInterval(activityInterval);
+    currentActivityChannelId = targetChannelId;
 
     activityInterval = setInterval(() => {
-      sendActivityCheck();
+      sendActivityCheck(currentActivityChannelId);
     }, ms);
 
-    await m.channel.send(`✅ **Activity Check Loop Started!** It will now post every **${timeStr}** in the dedicated channel. Sending the first one now...`);
-    await sendActivityCheck();
+    await m.channel.send(`✅ **Activity Check Loop Started!** It will now post every **${timeStr}** in <#${currentActivityChannelId}>. Sending the first one now...`);
+    await sendActivityCheck(currentActivityChannelId);
     return;
   }
 
